@@ -17,9 +17,11 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Guaranteed termination via levels + lexicographic subterm ordering
 - No currying — all arguments explicit
 - Enums (runtime discriminant) and unions (erased discriminant)
-- Functions and match expressions can return multiple values (product/sigma types)
+- Functions and match expressions can return zero or more values (not just one)
 - Every variable declaration must explicitly provide its silo
 - Every value constructor invocation must explicitly specify the silo of the constructed value
+- Every function invocation must explicitly specify the silo of the call
+- Every match expression must explicitly specify the silo of the match
 - Every function definition and match expression must have an explicitly annotated return type
 - Variables can use **"is" declarations** instead of type declarations: the variable is declared equal to a provided expression (which follows the constructor-only rule from the Type System section). The actual type is derivable from the expression. The silo of the variable can differ from the silo of the expression it equals.
 - Compile-time computation and macros (details TBD)
@@ -36,7 +38,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 
 - **Proofs as resources**: LE values track protocol obligations; UE values express closed facts. Erased references don't consume linear bindings.
 - **Erasure discipline**: UE is free to reference anything — references in type expressions never count as consumption.
-- **Explicit over magical**: termination proofs, level ordering, and impossibility proofs are programmer-visible, not inferred behind the scenes.
+- **Explicit over magical**: termination proofs, level ordering, and absurdity proofs are programmer-visible, not inferred behind the scenes.
 - **No hidden cost**: if something is erased, it has zero runtime representation.
 
 ## The Four Silos
@@ -65,40 +67,50 @@ Transition rules:
 - **Runtime**: result has runtime rep only if both are runtime.
 - **Linearity**: result is linear only if both are linear.
 
-Applied at two sites:
+Since meet is commutative and associative, multi-parameter meet chains naturally: `meet(a, b, c) = meet(meet(a, b), c)`.
 
-- **Construction**: argument provided at `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the constructed value.
-- **Matching**: binding assigned `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the matched value.
+Applied at five sites:
+
+- **Construction**: argument provided at `meet(constructor_silo, field_declared_silo)`, where constructor_silo is the silo specified at the invocation site.
+- **Matching (pattern bindings)**: binding assigned `meet(match_silo, scrutinee_silo, field_declared_silo)`, where match_silo is the silo of the match expression and scrutinee_silo is the silo of the value being matched.
+- **Matching (return values)**: return value assigned `meet(match_silo, return_declared_silo)`, where match_silo is the silo of the match expression (when there are return values).
+- **Function invocation (arguments)**: argument provided at `meet(call_silo, param_declared_silo)`, where call_silo is the silo specified at the call site.
+- **Function invocation (return values)**: return value assigned `meet(call_silo, return_declared_silo)`, where call_silo is the silo specified at the call site (when there are return values).
+
+The silo of a call or match determines whether the body executes at runtime (LR/UR: yes; LE/UE: no). This matters even for zero-return-value invocations (e.g., linear destructors).
 
 A value's silo is fixed at construction and does not change for the lifetime of the value. The only silo transition is `erase`, which produces a UE expression definitionally equal to the original — the original retains its silo.
 
 ADT types are not defined at a particular silo — the same type can be constructed at any silo. The silo is specified at each constructor invocation site, not in the type definition. Declared field silos are ceilings: the effective silo of a field at a given site is `meet(invocation_silo, declared_silo)`, which may be weaker than the declared silo.
 
-Function pointers are always unrestricted (UR or UE — never linear). Certain base types (Level, LevelGT, etc.) are always UE.
+Certain base types (Level, LevelGT, etc.) are always UE.
 
-## Enums and Unions
+## Enums, Unions, and Matching
 
-**Enums** have a runtime discriminant. Branching is a runtime operation.
+**Enums** have a runtime discriminant. **Unions** have an erased (UE) discriminant.
 
-**Unions** have an erased discriminant. Matching on a union requires either:
-1. The matched value is at an erased silo (LE or UE — use `erase` to obtain a UE expression definitionally equal to the original), or
-2. All branches except one are proven impossible.
+**Match discriminant availability** — whether a match can branch at runtime depends on whether the scrutinee's discriminant is available at runtime:
+
+- **Runtime discriminant**: enum scrutinee at LR or UR. Any number of non-absurd branches allowed — runtime branching selects among them.
+- **Erased discriminant**: union scrutinee at any silo, or enum scrutinee at LE or UE. The match cannot branch at runtime, so:
+  - **Match silo has runtime rep** (LR or UR): exactly one non-absurd branch.
+  - **Match silo is erased** (LE or UE, including zero return values): any number of non-absurd branches. No runtime code is generated.
+
+A match expression requires an explicit silo keyword. The match silo is independent of the scrutinee's silo — it determines the meet for pattern bindings and return values, and whether the match body executes at runtime.
 
 **Match branches** come in three kinds:
 
-| Kind | Body | Impossibility via |
-|------|------|-------------------|
-| Normal | Produces match return type | — (branch may run) |
+| Kind | Body | Absurdity via |
+|------|------|---------------|
+| Normal | Produces values of the match's return type | — (branch may run) |
 | Absurd | No body | Compiler unification alone |
-| Proved impossible | Produces a value of an empty type (e.g., `False`) using pattern variables | Programmer constructs proof |
-
-The silo of a match expression is determined by the silo of the value being matched — no separate silo annotation is needed. Matching a UE value is phantom; matching an LR/UR value is runtime.
+| Proved absurd | Produces a value of an empty type (e.g., `False`) using pattern variables | Programmer constructs proof |
 
 ## Type System
 
 - **ADTs and GADTs**: types can be indexed by constructor terms.
 - **Types contain constructors only**: `Vec (S n)` is legal; `Vec (add n 1)` is not. Proof types like `Add : Nat → Nat → Nat → Type` bridge this gap.
-- **Uninhabited types are useful**: `False`, `Infinite`, etc. serve as impossibility evidence and type-level constraints even though they have no inhabitants.
+- **Uninhabited types are useful**: `False`, `Infinite`, etc. serve as absurdity evidence and type-level constraints even though they have no inhabitants.
 - **Pattern matching unifies**: matching a GADT refines types in scope via unification (Axiom K).
 - **Constructors have no levels**: value and type constructors are always available regardless of level. Only function definitions carry level annotations.
 - **Phantom constructors**: a constructor may be declared phantom. Phantom constructors can only be constructed in an erased context (LE or UE silo). However, since any ordinary function can be invoked in a phantom context, code cannot assume that a value was not constructed via a phantom constructor.
@@ -132,6 +144,8 @@ A `Transmute` proof (usually phantom nonlinear) demonstrates that `a` can be tra
 Every function carries **level** and **subterm** annotations in its type.
 
 **Four call modes:**
+
+In all four call modes, the invoked function may be either a named function or a function pointer. Function pointers are always unrestricted (UR or UE — never linear).
 
 - **`lower`**: calls a function at a strictly lower level. Requires a `LevelGT : Level → Level → Type` proof, provided via `lvl-gt` special form (compiler verifies, errors if it can't prove the ordering).
 - **`recur`**: calls a function at the same level. Requires lexicographic descent:
