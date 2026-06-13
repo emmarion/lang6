@@ -9,7 +9,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 ## Hard Goals
 
 - Statically typed, eagerly evaluated
-- Restricted dependent types: ADTs/GADTs can appear in types, but **no function application in types** — only constructors
+- Restricted dependent types: ADTs/GADTs can appear in types (see Type System)
 - Dependent pattern matching with Axiom K and unification (Idris 2 style)
 - Four silos: LR (linear runtime), LE (linear erased), UR (unrestricted runtime), UE (unrestricted erased)
 - Linear = exactly one use + unique reference (enabling safe in-place mutation)
@@ -21,7 +21,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Every variable declaration must explicitly provide its silo
 - Every value constructor invocation must explicitly specify the silo of the constructed value
 - Every function definition and match expression must have an explicitly annotated return type
-- Variables can use **"is" declarations** instead of type declarations: the variable is declared equal to a provided expression (which follows the usual type rules — no function invocation, only constructors). The actual type is derivable from the expression. Note that the silo of the variable can differ from the silo of the expression it equals.
+- Variables can use **"is" declarations** instead of type declarations: the variable is declared equal to a provided expression (which follows the constructor-only rule from the Type System section). The actual type is derivable from the expression. The silo of the variable can differ from the silo of the expression it equals.
 - Compile-time computation and macros (details TBD)
 
 ## Non-Goals
@@ -49,7 +49,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 | **UE** | Freely | No | Type-level indices, closed proofs |
 
 Transition rules:
-- Any value can be **projected** into UE, creating a phantom copy. The original value remains — this is not consumption and does not change the original's silo.
+- **Erase** (special form): `erase x` produces a UE expression that is definitionally equal to `x` (recognized by the canonicalization rewrite system). The original value is not consumed and retains its original silo. `erase` is the only built-in silo transition.
 - UE is the only free projection target. LR, LE, and UR are otherwise **independent** — no built-in way to move between them.
 - All type expressions live in UE.
 
@@ -70,7 +70,7 @@ Applied at two sites:
 - **Construction**: argument provided at `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the constructed value.
 - **Matching**: binding assigned `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the matched value.
 
-A value's silo is fixed at construction and does not change for the lifetime of the value. The only silo transition is projection to UE, which creates a phantom copy — the original value retains its original silo.
+A value's silo is fixed at construction and does not change for the lifetime of the value. The only silo transition is `erase`, which produces a UE expression definitionally equal to the original — the original retains its silo.
 
 ADT types are not defined at a particular silo — the same type can be constructed at any silo. The silo is specified at each constructor invocation site, not in the type definition. Declared field silos are ceilings: the effective silo of a field at a given site is `meet(invocation_silo, declared_silo)`, which may be weaker than the declared silo.
 
@@ -81,7 +81,7 @@ Function pointers are always unrestricted (UR or UE — never linear). Certain b
 **Enums** have a runtime discriminant. Branching is a runtime operation.
 
 **Unions** have an erased discriminant. Matching on a union requires either:
-1. The entire match is phantom (silo-annotated as erased — linear or not), or
+1. The matched value is at an erased silo (LE or UE — use `erase` to obtain a UE expression definitionally equal to the original), or
 2. All branches except one are proven impossible.
 
 **Match branches** come in three kinds:
@@ -92,7 +92,7 @@ Function pointers are always unrestricted (UR or UE — never linear). Certain b
 | Absurd | No body | Compiler unification alone |
 | Proved impossible | Produces a value of an empty type (e.g., `False`) using pattern variables | Programmer constructs proof |
 
-All matches must be **silo-annotated** so the compiler knows whether it observes a runtime value or reasons about a phantom copy.
+The silo of a match expression is determined by the silo of the value being matched — no separate silo annotation is needed. Matching a UE value is phantom; matching an LR/UR value is runtime.
 
 ## Type System
 
@@ -101,7 +101,7 @@ All matches must be **silo-annotated** so the compiler knows whether it observes
 - **Uninhabited types are useful**: `False`, `Infinite`, etc. serve as impossibility evidence and type-level constraints even though they have no inhabitants.
 - **Pattern matching unifies**: matching a GADT refines types in scope via unification (Axiom K).
 - **Constructors have no levels**: value and type constructors are always available regardless of level. Only function definitions carry level annotations.
-- **Phantom constructors**: a constructor may be declared phantom. Phantom constructors can only be constructed in a phantom (erased) context. However, since any ordinary function can be invoked in a phantom context, code cannot assume that a value was not constructed via a phantom constructor.
+- **Phantom constructors**: a constructor may be declared phantom. Phantom constructors can only be constructed in an erased context (LE or UE silo). However, since any ordinary function can be invoked in a phantom context, code cannot assume that a value was not constructed via a phantom constructor.
 - **Recursive types are allowed** with no strict positivity requirement.
 - **`Type : Type`**: the language allows `Type : Type`. This would normally be inconsistent (Girard's paradox), but the termination guarantee via levels should prevent the circular constructions needed for the paradox. This requires careful metatheoretic verification.
 - **Transmute**: safe type-punning via proofs.
@@ -112,14 +112,20 @@ Transmute : Linearity → (A: Type) → (a: A) → Linearity → (B: Type) → (
 
 A `Transmute` proof (usually phantom nonlinear) demonstrates that `a` can be transmuted to `b` and vice versa. A special form performs the actual runtime transmutation given a proof.
 
-**Axioms:** reflective, symmetric, transitive.
+**Built-in functions:**
+
+- **`transmute-refl`**: produces `Transmute L A a L A a`
+- **`transmute-sym`**: `Transmute L A a L' B b → Transmute L' B b L A a`
+- **`transmute-trans`**: `Transmute L A a L' B b → Transmute L' B b L'' C c → Transmute L A a L'' C c`
 
 **Construction rules:**
 
-- **Newtype wrapping**: if a data type has exactly one non-phantom constructor with exactly one non-phantom argument, and transmute subproofs are provided for all linear phantom arguments, then transmutation to/from the wrapped field is valid. For unions: one "data" constructor, all other constructors phantom or phantom-only, and the value must obviously come from that constructor.
-- **Same constructor**: if two values share the same constructor, phantom nonlinear arguments can be ignored, and transmute proofs must be provided for everything else.
-- **Level lifting**: given levels `a` and `b` with `LevelGT a b`, and a function pointer at level `b`, a new function pointer `f` at level `a` is produced along with a transmute proof connecting the two. This is safe because a function at a lower level can always be called from a higher level.
-- **Delegate unwrapping**: if a function in scope was defined via `delegate` to another function, a transmute proof can be constructed from the delegating function to the delegatee. Since `delegate` guarantees the body is exactly a call to the target (after transmute/phantom removal), the two are representationally identical.
+| Rule | When | Requirement |
+|------|------|-------------|
+| Newtype wrapping | Single constructor with exactly one LR/UR argument | Transmute subproofs for all LE arguments; UE arguments need no proof. For enums: exactly one constructor total. For unions: every other constructor stores no runtime data (is phantom, or has only LE/UE declared arguments, or both), and the value must obviously come from that constructor |
+| Same constructor | Two values share a constructor | UE arguments freely differ; LR, LE, and UR arguments require transmute proofs |
+| Level lifting | `LevelGT a b` (both UE) + function pointer at level `b` | Produces function pointer at level `a` + transmute proof. Safe because a lower-level function can always be called from a higher level |
+| Delegate unwrapping | Function defined via `delegate` to another | Proof from delegator to delegatee. `delegate` guarantees the body is exactly a call to the target after removing LE/UE code and transmute wrappers, so the two are representationally identical |
 
 ## Termination
 
@@ -135,6 +141,8 @@ Every function carries **level** and **subterm** annotations in its type.
   - Arguments after that are unconstrained.
 - **`tail`**: like `recur` (same level, lexicographic descent), but the compiler verifies the call is in tail position. After removing any phantom code and transmutes, the return result must match what is eventually returned. This enables tail-call optimization with a termination guarantee.
 - **`delegate`**: the entire function body, after transmutation removal and phantom removal, must be exactly a call to the invoked function. Like `lower`, the called function can be at a lower level. The function is a pure wrapper — no computation beyond delegation.
+
+Each call mode requires exactly one proof: `lower` and `delegate` require a `LevelGT` proof, while `recur` and `tail` require a `Subterm` proof (for the first differing argument). A single call never needs both kinds.
 
 **Subterm proofs:**
 
@@ -157,7 +165,7 @@ LevelGT : Level → Level → Type
 - Level transitivity is available: if `LevelGT l1 l2` and `LevelGT l2 l3`, then `LevelGT l1 l3`. `Level` and `LevelGT` are first-class types and values.
 - **Function definitions** explicitly specify their level, which must already exist (from a prior `def-lvl`).
 - **Higher levels call lower levels**: `lower`-calls go strictly downward. Library code defines low levels; `main()` sits high enough to reach everything it needs.
-- **Dead code elimination**: any level higher than `main()`'s level is unreachable at runtime. Functions and closures at those levels can be replaced with no-ops.
+- **Level unreachability**: any level higher than `main()`'s level is unreachable at runtime. This is a language-level guarantee, not just an optimization — functions and closures at those levels are replaced with no-ops (relevant to type sizing and size monomorphization).
 - `def-lvl` may appear inside functions, dynamically creating new levels. This interacts with closures (see below).
 
 **Closures (v1 restriction):**
