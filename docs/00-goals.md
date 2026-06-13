@@ -17,8 +17,9 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Guaranteed termination via levels + lexicographic subterm ordering
 - No currying — all arguments explicit
 - Enums (runtime discriminant) and unions (erased discriminant)
-- Functions can return multiple values (product/sigma types)
+- Functions and match expressions can return multiple values (product/sigma types)
 - Every variable declaration must explicitly provide its silo
+- Every function definition and match expression must have an explicitly annotated return type
 - Variables can use **"is" declarations** instead of type declarations: the variable is declared equal to a provided expression (which follows the usual type rules — no function invocation, only constructors). The actual type is derivable from the expression. Note that the silo of the variable can differ from the silo of the expression it equals.
 - Compile-time computation and macros (details TBD)
 
