@@ -19,6 +19,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Enums (runtime discriminant) and unions (erased discriminant)
 - Functions and match expressions can return multiple values (product/sigma types)
 - Every variable declaration must explicitly provide its silo
+- Every value constructor invocation must explicitly specify the silo of the constructed value
 - Every function definition and match expression must have an explicitly annotated return type
 - Variables can use **"is" declarations** instead of type declarations: the variable is declared equal to a provided expression (which follows the usual type rules — no function invocation, only constructors). The actual type is derivable from the expression. Note that the silo of the variable can differ from the silo of the expression it equals.
 - Compile-time computation and macros (details TBD)
@@ -51,6 +52,23 @@ Transition rules:
 - Any value can be **projected** into UE, creating a phantom copy. The original value remains — this is not consumption and does not change the original's silo.
 - UE is the only free projection target. LR, LE, and UR are otherwise **independent** — no built-in way to move between them.
 - All type expressions live in UE.
+
+**Silo meet** — when constructing or matching a value of invocation silo X with a field of declared silo Y, the effective silo is `meet(X, Y)`:
+
+| meet(invocation, declared) | **LR** | **LE** | **UR** | **UE** |
+|---|---|---|---|---|
+| **LR** | LR | LE | UR | UE |
+| **LE** | LE | LE | UE | UE |
+| **UR** | UR | UE | UR | UE |
+| **UE** | UE | UE | UE | UE |
+
+- **Runtime**: result has runtime rep only if both are runtime.
+- **Linearity**: result is linear only if both are linear.
+
+Applied at two sites:
+
+- **Construction**: argument provided at `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the constructed value.
+- **Matching**: binding assigned `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the matched value.
 
 ## Enums and Unions
 
