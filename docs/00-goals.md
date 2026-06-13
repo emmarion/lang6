@@ -70,6 +70,8 @@ Applied at two sites:
 - **Construction**: argument provided at `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the constructed value.
 - **Matching**: binding assigned `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the matched value.
 
+A value's silo is fixed at construction and does not change for the lifetime of the value. The only silo transition is projection to UE, which creates a phantom copy — the original value retains its original silo.
+
 ADT types are not defined at a particular silo — the same type can be constructed at any silo. The silo is specified at each constructor invocation site, not in the type definition. Declared field silos are ceilings: the effective silo of a field at a given site is `meet(invocation_silo, declared_silo)`, which may be weaker than the declared silo.
 
 Function pointers are always unrestricted (UR or UE — never linear). Certain base types (Level, LevelGT, etc.) are always UE.
