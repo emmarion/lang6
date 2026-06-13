@@ -70,6 +70,10 @@ Applied at two sites:
 - **Construction**: argument provided at `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the constructed value.
 - **Matching**: binding assigned `meet(invocation_silo, declared_silo)`, where invocation silo is the silo of the matched value.
 
+ADT types are not defined at a particular silo — the same type can be constructed at any silo. The silo is specified at each constructor invocation site, not in the type definition. Declared field silos are ceilings: the effective silo of a field at a given site is `meet(invocation_silo, declared_silo)`, which may be weaker than the declared silo.
+
+Function pointers are always unrestricted (UR or UE — never linear). Certain base types (Level, LevelGT, etc.) are always UE.
+
 ## Enums and Unions
 
 **Enums** have a runtime discriminant. Branching is a runtime operation.
