@@ -148,7 +148,7 @@ Every function carries **level** and **subterm** annotations in its type.
 
 **Four call modes:**
 
-In all four call modes, the invoked function may be either a named function or a function pointer. Function pointers are always unrestricted (UR or UE — never linear).
+In all four call modes, the invoked function may be either a named function or a function pointer. Function pointers are always unrestricted (UR or UE — never linear). Function pointers are likely "fat": one entry point for UR invocation silo and one for LR invocation silo, since the generated code differs by invocation silo.
 
 - **`lower`**: calls a function at a strictly lower level. Requires a `LevelGT : Level → Level → Type` proof, provided via `lvl-gt` special form (compiler verifies, errors if it can't prove the ordering).
 - **`recur`**: calls a function at the same level. Requires lexicographic descent:
