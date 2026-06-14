@@ -24,7 +24,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Every match expression must explicitly specify the mode of the match
 - Every function definition and match expression must have an explicitly annotated return type
 - **"is" declarations** can appear wherever a type annotation is expected (variable declarations, function parameters, constructor fields, etc.): the binding is declared equal to a provided expression (which follows the no-function-application rule from the Type System section). The actual type is derivable from the expression. The silo of the binding can differ from the silo of the expression it equals. "is" replaces only the type — the initializing expression is still required (when relevant).
-- Compile-time computation and macros (details TBD)
+- Compile-time computation and macros via the `comptime` call mode
 
 ## Non-Goals
 
@@ -159,7 +159,7 @@ A `Transmute` proof (usually phantom nonlinear) demonstrates that `a` can be tra
 
 Every function carries **level** and **subterm** annotations in its type.
 
-**Four call modes:**
+**Five call modes:**
 
 In all four call modes, the invoked function may be either a named function or a function pointer. Function pointers are always unrestricted (UR or UE — never linear). Function pointers are likely "fat": one entry point for UR invocation silo and one for LR invocation silo, since the generated code differs by invocation silo.
 
@@ -171,8 +171,9 @@ In all four call modes, the invoked function may be either a named function or a
   - Arguments after that are unconstrained.
 - **`tail`**: like `recur` (same level, lexicographic descent), but the compiler verifies the call is in tail position. After removing any erased code and transmutes, the return result must match what is eventually returned. This enables tail-call optimization with a termination guarantee.
 - **`delegate`**: the entire function body, after transmutation removal and erased-code removal, must be exactly a call to the invoked function. Like `lower`, the called function can be at a lower level. The function is a pure wrapper — no computation beyond delegation.
+- **`comptime`**: calls a function from top level (outside any function body). No proof obligation required — the callee already carries a level and its body's termination has been independently verified. The call silo must be UR or UE (no runtime linear context exists at top level). The silo is still specified at the call site.
 
-Each call mode requires exactly one proof: `lower` and `delegate` require a `LevelGT` proof, while `recur` and `tail` require a `Subterm` proof (for the first differing argument). A single call never needs both kinds.
+Four of the five call modes require exactly one proof: `lower` and `delegate` require a `LevelGT` proof, while `recur` and `tail` require a `Subterm` proof (for the first differing argument). A single call never needs both kinds. The `comptime` mode requires no proof — the callee's termination is already established.
 
 **Subterm proofs:**
 
@@ -208,5 +209,9 @@ Closures may only close over UR and UE values. Closing over LR and LE values is 
 
 ## Comptime and Macros
 
-Placeholder. The language will support compile-time computation and macros (à la Zig/Racket). Since the language guarantees termination, comptime always terminates. Details TBD.
+lang6 supports compile-time computation via the `comptime` call mode at top level. Since the language guarantees termination for all verified functions, comptime evaluation always terminates.
+
+Comptime calls operate above the level system — they don't run at any level and require no proof obligation. The callee's own level and termination proof suffice. The call silo must be UR or UE; no runtime linear context exists at top level, so LR and LE are not available.
+
+Macro and comptime details beyond top-level invocation are TBD.
 

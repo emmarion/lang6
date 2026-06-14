@@ -7,4 +7,4 @@
 - **Module system**: namespaces, visibility, separate compilation.
 - **Syntax sketch**: enough notation to write examples — how are silos, levels, subterm annotations, and match kinds written?
 - **Recursive types & Type : Type**: `Type : Type` with guaranteed termination via levels should be consistent, but this needs formal verification.
-- **Comptime & levels interaction**: what level does comptime code run at?
+- **Comptime & levels interaction**: resolved — comptime doesn't run at a level; it operates above the level system via the `comptime` call mode, which requires no proof obligation. The callee's termination is already established by its own level and body.
