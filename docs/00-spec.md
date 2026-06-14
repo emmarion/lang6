@@ -6,7 +6,7 @@ Rust forces `unsafe` in the **implementation** of fundamental data structures (V
 
 The target domain is low-level, correctness-critical code: encryption, compression, file format parsing.
 
-## Hard Goals
+## Language Properties
 
 - Statically typed, eagerly evaluated
 - Restricted dependent types: ADTs/GADTs can appear in types (see Type System)
@@ -18,13 +18,16 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - No currying — all arguments explicit
 - Enums (runtime discriminant) and unions (erased discriminant)
 - Functions and match expressions can return zero or more values (not just one)
+- Compile-time computation and macros via the `comptime` call mode
+
+## Explicit Annotations
+
 - Every variable declaration must explicitly provide its silo
 - Every value constructor invocation must explicitly specify the silo of the constructed value
 - Every function invocation must explicitly specify the silo of the call
 - Every match expression must explicitly specify the mode of the match
 - Every function definition and match expression must have an explicitly annotated return type
 - **"is" declarations** can appear wherever a type annotation is expected (variable declarations, function parameters, constructor fields, etc.): the binding is declared equal to a provided expression (which follows the no-function-application rule from the Type System section). The actual type is derivable from the expression. The silo of the binding can differ from the silo of the expression it equals. "is" replaces only the type — the initializing expression is still required (when relevant).
-- Compile-time computation and macros via the `comptime` call mode
 
 ## Non-Goals
 
@@ -111,7 +114,7 @@ Note: phantom constructor branches currently require all code to be annotated wi
 
 A match expression requires an explicit mode keyword. Note: for type-correctness across all invocation silos, phantom constructors must still be accounted for in pattern matches (see Phantom constructors).
 
-**Match branches** come in four kinds:
+**Match entries** come in two categories: **branches** (Live, Phantom constructor) produce values and are subject to linearity rules; **absurdity proofs** (Absurd, Proved absurd) establish impossibility and have no linearity obligations.
 
 | Kind | Body | Absurdity via |
 |------|------|---------------|
@@ -161,7 +164,7 @@ Every function carries **level** and **subterm** annotations in its type.
 
 **Five call modes:**
 
-In all four call modes, the invoked function may be either a named function or a function pointer. Function pointers are always unrestricted (UR or UE — never linear). Function pointers are likely "fat": one entry point for UR invocation silo and one for LR invocation silo, since the generated code differs by invocation silo.
+In all five call modes, the invoked function may be either a named function or a function pointer. Function pointers are always unrestricted (UR or UE — never linear). Function pointers are likely "fat": one entry point for UR invocation silo and one for LR invocation silo, since the generated code differs by invocation silo.
 
 - **`lower`**: calls a function at a strictly lower level. Requires a `LevelGT : Level → Level → Type` proof, provided via `lvl-gt` special form (compiler verifies, errors if it can't prove the ordering).
 - **`recur`**: calls a function at the same level. Requires lexicographic descent:
@@ -174,6 +177,8 @@ In all four call modes, the invoked function may be either a named function or a
 - **`comptime`**: calls a function from top level (outside any function body). No proof obligation required — the callee already carries a level and its body's termination has been independently verified. The call silo must be UR or UE (no runtime linear context exists at top level). The silo is still specified at the call site.
 
 Four of the five call modes require exactly one proof: `lower` and `delegate` require a `LevelGT` proof, while `recur` and `tail` require a `Subterm` proof (for the first differing argument). A single call never needs both kinds. The `comptime` mode requires no proof — the callee's termination is already established.
+
+A function definition may be designated `proved-absurd`. The designation must be explicitly declared. Its body must construct an `Empty` value from its parameters, establishing that the parameters are impossible to simultaneously satisfy. Proved-absurd entries — both in match and in function definitions — have no linearity obligations, as they are proofs of impossibility rather than execution paths.
 
 **Subterm proofs:**
 
