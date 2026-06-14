@@ -12,7 +12,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Restricted dependent types: ADTs/GADTs can appear in types (see Type System)
 - Dependent pattern matching with Axiom K and unification (Idris 2 style)
 - Four silos: LR (linear runtime), LE (linear erased), UR (unrestricted runtime), UE (unrestricted erased)
-- Linear = exactly one use + unique reference (enabling safe in-place mutation)
+- "Linear" = linear + unique — exactly one use AND no aliasing, enabling safe in-place mutation
 - No runtime checks — invariants proven statically
 - Guaranteed termination via levels + lexicographic subterm ordering
 - No currying — all arguments explicit
@@ -169,8 +169,8 @@ In all four call modes, the invoked function may be either a named function or a
   - Arguments before the first difference must be equal (proven by definitional equality).
   - The first differing argument must be a strict subterm (proven via `Subterm`).
   - Arguments after that are unconstrained.
-- **`tail`**: like `recur` (same level, lexicographic descent), but the compiler verifies the call is in tail position. After removing any phantom code and transmutes, the return result must match what is eventually returned. This enables tail-call optimization with a termination guarantee.
-- **`delegate`**: the entire function body, after transmutation removal and phantom removal, must be exactly a call to the invoked function. Like `lower`, the called function can be at a lower level. The function is a pure wrapper — no computation beyond delegation.
+- **`tail`**: like `recur` (same level, lexicographic descent), but the compiler verifies the call is in tail position. After removing any erased code and transmutes, the return result must match what is eventually returned. This enables tail-call optimization with a termination guarantee.
+- **`delegate`**: the entire function body, after transmutation removal and erased-code removal, must be exactly a call to the invoked function. Like `lower`, the called function can be at a lower level. The function is a pure wrapper — no computation beyond delegation.
 
 Each call mode requires exactly one proof: `lower` and `delegate` require a `LevelGT` proof, while `recur` and `tail` require a `Subterm` proof (for the first differing argument). A single call never needs both kinds.
 
