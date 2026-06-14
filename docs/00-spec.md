@@ -23,7 +23,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Every function invocation must explicitly specify the silo of the call
 - Every match expression must explicitly specify the silo of the match
 - Every function definition and match expression must have an explicitly annotated return type
-- **"is" declarations** can appear wherever a type annotation is expected (variable declarations, function parameters, constructor fields, etc.): the binding is declared equal to a provided expression (which follows the constructor-only rule from the Type System section). The actual type is derivable from the expression. The silo of the binding can differ from the silo of the expression it equals. "is" replaces only the type — the initializing expression is still required (when relevant).
+- **"is" declarations** can appear wherever a type annotation is expected (variable declarations, function parameters, constructor fields, etc.): the binding is declared equal to a provided expression (which follows the no-function-application rule from the Type System section). The actual type is derivable from the expression. The silo of the binding can differ from the silo of the expression it equals. "is" replaces only the type — the initializing expression is still required (when relevant).
 - Compile-time computation and macros (details TBD)
 
 ## Non-Goals
@@ -113,7 +113,7 @@ TODO: May change — we might just ignore erasureness here in the future.
 ## Type System
 
 - **ADTs and GADTs**: types can be indexed by constructor terms.
-- **Types contain constructors only**: `Vec (S n)` is legal; `Vec (add n 1)` is not. Proof types like `Add : Nat → Nat → Nat → Type` bridge this gap.
+- **No function application in type expressions**: type expressions and `is` expressions may contain type constructors, value constructors, and variable references — but no function applications. `Vec (S n)` is legal; `Vec (add n 1)` is not. Proof types like `Add : Nat → Nat → Nat → Type` bridge this gap.
 - **Uninhabited types are useful**: `False`, `Infinite`, etc. serve as absurdity evidence and type-level constraints even though they have no inhabitants.
 - **Pattern matching unifies**: matching a GADT refines types in scope via unification (Axiom K).
 - **Constructors have no levels**: value and type constructors are always available regardless of level. Only function definitions carry level annotations.
@@ -138,7 +138,7 @@ A `Transmute` proof (usually phantom nonlinear) demonstrates that `a` can be tra
 
 | Rule | When | Requirement |
 |------|------|-------------|
-| Newtype wrapping | Single constructor with exactly one LR/UR argument | Transmute subproofs for all LE arguments; UE arguments need no proof. For enums: exactly one constructor total. For unions: every other constructor stores no runtime data (is phantom, or has only LE/UE declared arguments, or both), and the value must obviously come from that constructor |
+| Newtype wrapping | Single constructor with exactly one LR/UR argument | Transmute subproofs for all LE arguments; UE arguments need no proof. For enums: exactly one constructor total. For unions: every other constructor stores no runtime data (is phantom, or has only LE/UE declared arguments, or both), and the programmer provides a constructor expression that the compiler checks for definitional equality with the scrutinee, establishing which constructor form the value takes |
 | Same constructor | Two values share a constructor | UE arguments freely differ; LR, LE, and UR arguments require transmute proofs |
 | Level lifting | `LevelGT a b` (both UE) + function pointer at level `b` | Produces function pointer at level `a` + transmute proof. Safe because a lower-level function can always be called from a higher level |
 | Delegate unwrapping | Function defined via `delegate` to another | Proof from delegator to delegatee. `delegate` guarantees the body is exactly a call to the target after removing LE/UE code and transmute wrappers, so the two are representationally identical |
@@ -154,7 +154,7 @@ In all four call modes, the invoked function may be either a named function or a
 - **`lower`**: calls a function at a strictly lower level. Requires a `LevelGT : Level → Level → Type` proof, provided via `lvl-gt` special form (compiler verifies, errors if it can't prove the ordering).
 - **`recur`**: calls a function at the same level. Requires lexicographic descent:
   - Subterm-annotated arguments are ordered.
-  - Arguments before the first difference must be equal (proven by unification).
+  - Arguments before the first difference must be equal (proven by definitional equality).
   - The first differing argument must be a strict subterm (proven via `Subterm`).
   - Arguments after that are unconstrained.
 - **`tail`**: like `recur` (same level, lexicographic descent), but the compiler verifies the call is in tail position. After removing any phantom code and transmutes, the return result must match what is eventually returned. This enables tail-call optimization with a termination guarantee.
@@ -169,7 +169,7 @@ Subterm : (A: Type) → (a: A) → (B: Type) → (b: B) → Type
 ```
 
 - Subterm arguments can be in any silo (LR, LE, UR, or UE).
-- `prove-subterm a b` — special form, compiler checks via unification, errors if unprovable. Cross-type: `A` and `B` may differ.
+- `prove-subterm a b` — special form, compiler checks via definitional equality, errors if unprovable. Cross-type: `A` and `B` may differ.
 - `subterm-trans` — compiler-provided function, composes two Subterm proofs transitively.
 
 **Level definitions and proofs:**
