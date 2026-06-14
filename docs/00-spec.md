@@ -23,7 +23,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Every function invocation must explicitly specify the silo of the call
 - Every match expression must explicitly specify the silo of the match
 - Every function definition and match expression must have an explicitly annotated return type
-- Variables can use **"is" declarations** instead of type declarations: the variable is declared equal to a provided expression (which follows the constructor-only rule from the Type System section). The actual type is derivable from the expression. The silo of the variable can differ from the silo of the expression it equals.
+- **"is" declarations** can appear wherever a type annotation is expected (variable declarations, function parameters, constructor fields, etc.): the binding is declared equal to a provided expression (which follows the constructor-only rule from the Type System section). The actual type is derivable from the expression. The silo of the binding can differ from the silo of the expression it equals. "is" replaces only the type — the initializing expression is still required (when relevant).
 - Compile-time computation and macros (details TBD)
 
 ## Non-Goals
@@ -96,15 +96,18 @@ Certain base types (Level, LevelGT, etc.) are always UE.
   - **Match silo has runtime rep** (LR or UR): exactly one non-absurd branch.
   - **Match silo is erased** (LE or UE, including zero return values): any number of non-absurd branches. No runtime code is generated.
 
-A match expression requires an explicit silo keyword. The match silo is independent of the scrutinee's silo — it determines the meet for pattern bindings and return values, and whether the match body executes at runtime.
+A match expression requires an explicit silo keyword. The match silo is independent of the scrutinee's silo — it determines the meet for pattern bindings and return values, and whether the match body executes at runtime. Note: these rules govern runtime branching behavior. For type-correctness across all invocation silos, phantom constructors must still be accounted for in pattern matches (see Phantom constructors).
 
-**Match branches** come in three kinds:
+**Match branches** come in four kinds:
 
 | Kind | Body | Absurdity via |
 |------|------|---------------|
 | Normal | Produces values of the match's return type | — (branch may run) |
+| Phantom constructor | All variables in scope treated as erased (UR→UE, LR→LE); return type also treated as erased | — |
 | Absurd | No body | Compiler unification alone |
 | Proved absurd | Produces a value of an empty type (e.g., `False`) using pattern variables | Programmer constructs proof |
+
+TODO: May change — we might just ignore erasureness here in the future.
 
 ## Type System
 
@@ -113,7 +116,7 @@ A match expression requires an explicit silo keyword. The match silo is independ
 - **Uninhabited types are useful**: `False`, `Infinite`, etc. serve as absurdity evidence and type-level constraints even though they have no inhabitants.
 - **Pattern matching unifies**: matching a GADT refines types in scope via unification (Axiom K).
 - **Constructors have no levels**: value and type constructors are always available regardless of level. Only function definitions carry level annotations.
-- **Phantom constructors**: a constructor may be declared phantom. Phantom constructors can only be constructed in an erased context (LE or UE silo). However, since any ordinary function can be invoked in a phantom context, code cannot assume that a value was not constructed via a phantom constructor.
+- **Phantom constructors**: a constructor may be declared phantom. Phantom constructors can only be constructed at erased silos (LE/UE). The true silo of a function argument is the meet of the entire invocation chain and its declared silo, so even a declared UR/LR ADT value may have a phantom constructor as its discriminant when the invocation chain is erased. Since erased code must be type-correct — other code may depend on proofs constructed in erased contexts — pattern matches must account for phantom constructors as possible discriminants. Code cannot assume a declared UR/LR ADT value was not constructed via a phantom constructor.
 - **Recursive types are allowed** with no strict positivity requirement.
 - **`Type : Type`**: the language allows `Type : Type`. This would normally be inconsistent (Girard's paradox), but the termination guarantee via levels should prevent the circular constructions needed for the paradox. This requires careful metatheoretic verification.
 - **Transmute**: safe type-punning via proofs.

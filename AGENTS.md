@@ -4,7 +4,7 @@ We are designing **lang6**, a statically typed, eagerly evaluated language with 
 
 ## Key Documents
 
-- `docs/00-goals.md` — design goals, silos, type system, termination, enums/unions, transmute, call modes, variable declarations
+- `docs/00-spec.md` — design goals, silos, type system, termination, enums/unions, transmute, call modes, variable declarations
 - `docs/01-open-questions.md` — unresolved design questions (arithmetic, memory model, FFI, error handling, modules, syntax, comptime)
 
 ## Core Design Principles
