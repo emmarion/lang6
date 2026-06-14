@@ -40,6 +40,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - **Erasure discipline**: UE is free to reference anything — references in type expressions never count as consumption.
 - **Explicit over magical**: termination proofs, level ordering, and absurdity proofs are programmer-visible, not inferred behind the scenes.
 - **No hidden cost**: if something is erased, it has zero runtime representation.
+- **UR-projection soundness**: Any well-typed lang6 program, with all silo annotations replaced by UR and phantom designations ignored, is denotationally equivalent — it produces the same logical results — except at FFI boundaries. Operationally, unions collapse to enums, transmutes become copies, tail calls may lose tail optimization, and delegate wrappers execute normally; these preserve results but not resource guarantees. This property constrains the design: features must not introduce denotationally observable behavior that depends on whether computation happens at runtime or is erased, unless that observation crosses an FFI boundary.
 
 ## The Four Silos
 
@@ -103,7 +104,7 @@ A match expression requires an explicit silo keyword. The match silo is independ
 | Kind | Body | Absurdity via |
 |------|------|---------------|
 | Live | Produces values of the match's return type | — (branch may run) |
-| Phantom constructor | All variables in scope treated as erased (UR→UE, LR→LE); return type also treated as erased | — |
+| Phantom constructor | All variables in scope treated as erased: UR→UE, LR→LE, UE and LE unchanged; return type also treated as erased | — |
 | Absurd | No body | Compiler unification alone |
 | Proved absurd | Produces a value of an empty type (e.g., `False`) using pattern variables | Programmer constructs proof |
 
