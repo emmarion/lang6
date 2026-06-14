@@ -91,10 +91,10 @@ Certain base types (Level, LevelGT, etc.) are always UE.
 
 **Match discriminant availability** — whether a match can branch at runtime depends on whether the scrutinee's discriminant is available at runtime:
 
-- **Runtime discriminant**: enum scrutinee at LR or UR. Any number of non-absurd branches allowed — runtime branching selects among them.
+- **Runtime discriminant**: enum scrutinee at LR or UR. Any number of Live branches allowed — runtime branching selects among them.
 - **Erased discriminant**: union scrutinee at any silo, or enum scrutinee at LE or UE. The match cannot branch at runtime, so:
-  - **Match silo has runtime rep** (LR or UR): exactly one non-absurd branch.
-  - **Match silo is erased** (LE or UE, including zero return values): any number of non-absurd branches. No runtime code is generated.
+  - **Match silo has runtime rep** (LR or UR): exactly one Live branch.
+  - **Match silo is erased** (LE or UE, including zero return values): any number of "Live" branches. No runtime code is generated.
 
 A match expression requires an explicit silo keyword. The match silo is independent of the scrutinee's silo — it determines the meet for pattern bindings and return values, and whether the match body executes at runtime. Note: these rules govern runtime branching behavior. For type-correctness across all invocation silos, phantom constructors must still be accounted for in pattern matches (see Phantom constructors).
 
@@ -102,7 +102,7 @@ A match expression requires an explicit silo keyword. The match silo is independ
 
 | Kind | Body | Absurdity via |
 |------|------|---------------|
-| Normal | Produces values of the match's return type | — (branch may run) |
+| Live | Produces values of the match's return type | — (branch may run) |
 | Phantom constructor | All variables in scope treated as erased (UR→UE, LR→LE); return type also treated as erased | — |
 | Absurd | No body | Compiler unification alone |
 | Proved absurd | Produces a value of an empty type (e.g., `False`) using pattern variables | Programmer constructs proof |
