@@ -21,7 +21,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 - Every variable declaration must explicitly provide its silo
 - Every value constructor invocation must explicitly specify the silo of the constructed value
 - Every function invocation must explicitly specify the silo of the call
-- Every match expression must explicitly specify the silo of the match
+- Every match expression must explicitly specify the mode of the match
 - Every function definition and match expression must have an explicitly annotated return type
 - **"is" declarations** can appear wherever a type annotation is expected (variable declarations, function parameters, constructor fields, etc.): the binding is declared equal to a provided expression (which follows the no-function-application rule from the Type System section). The actual type is derivable from the expression. The silo of the binding can differ from the silo of the expression it equals. "is" replaces only the type — the initializing expression is still required (when relevant).
 - Compile-time computation and macros (details TBD)
@@ -68,17 +68,18 @@ Transition rules:
 - **Runtime**: result has runtime rep only if both are runtime.
 - **Linearity**: result is linear only if both are linear.
 
-Since meet is commutative and associative, multi-parameter meet chains naturally: `meet(a, b, c) = meet(meet(a, b), c)`.
 
-Applied at five sites:
+
+Applied at four sites:
 
 - **Construction**: argument provided at `meet(constructor_silo, field_declared_silo)`, where constructor_silo is the silo specified at the invocation site.
-- **Matching (pattern bindings)**: binding assigned `meet(match_silo, scrutinee_silo, field_declared_silo)`, where match_silo is the silo of the match expression and scrutinee_silo is the silo of the value being matched.
-- **Matching (return values)**: return value assigned `meet(match_silo, return_declared_silo)`, where match_silo is the silo of the match expression (when there are return values).
+- **Matching (pattern bindings)**: depends on match mode — erased: UE; peek: UE; normal: `meet(scrutinee_silo, field_declared_silo)`, where scrutinee_silo is the silo of the value being matched.
 - **Function invocation (arguments)**: argument provided at `meet(call_silo, param_declared_silo)`, where call_silo is the silo specified at the call site.
 - **Function invocation (return values)**: return value assigned `meet(call_silo, return_declared_silo)`, where call_silo is the silo specified at the call site (when there are return values).
 
-The silo of a call or match determines whether the body executes at runtime (LR/UR: yes; LE/UE: no). This matters even for zero-return-value invocations (e.g., linear destructors).
+Match return values use their declared silos directly (subject to phantom-constructor erasure rules).
+
+The silo of a call determines whether the body executes at runtime (LR/UR: yes; LE/UE: no). This matters even for zero-return-value invocations (e.g., linear destructors).
 
 A value's silo is fixed at construction and does not change for the lifetime of the value. The only silo transition is `erase`, which produces a UE expression definitionally equal to the original — the original retains its silo.
 
@@ -90,14 +91,25 @@ Certain base types (Level, LevelGT, etc.) are always UE.
 
 **Enums** have a runtime discriminant. **Unions** have an erased (UE) discriminant.
 
-**Match discriminant availability** — whether a match can branch at runtime depends on whether the scrutinee's discriminant is available at runtime:
+**Match modes** — a match expression specifies one of three modes:
 
-- **Runtime discriminant**: enum scrutinee at LR or UR. Any number of Live branches allowed — runtime branching selects among them.
-- **Erased discriminant**: union scrutinee at any silo, or enum scrutinee at LE or UE. The match cannot branch at runtime, so:
-  - **Match silo has runtime rep** (LR or UR): exactly one Live branch.
-  - **Match silo is erased** (LE or UE, including zero return values): any number of "Live" branches. No runtime code is generated.
+| Mode | Scrutinee | Pattern bindings | Discriminant availability |
+|------|-----------|-------------------|---------------------------|
+| **Erased** | Treated as UE copy; not consumed | UE | Unavailable |
+| **Peek** | Not consumed | UE | Per scrutinee: enum at LR/UR → available; else → unavailable |
+| **Normal** | Consumed (if linear) | `meet(scrutinee_silo, field_declared_silo)` | Per scrutinee: enum at LR/UR → available; else → unavailable |
 
-A match expression requires an explicit silo keyword. The match silo is independent of the scrutinee's silo — it determines the meet for pattern bindings and return values, and whether the match body executes at runtime. Note: these rules govern runtime branching behavior. For type-correctness across all invocation silos, phantom constructors must still be accounted for in pattern matches (see Phantom constructors).
+**Live branch count** — how many Live branches (non-phantom, non-absurd) are permitted:
+
+- Discriminant available → any number of Live branches.
+- Discriminant not available + any non-phantom branch has code annotated with non-erased silos → exactly one Live branch.
+- Discriminant not available + all non-phantom branches contain only code annotated with erased silos → any number of Live branches.
+
+Note: phantom constructor branches currently require all code to be annotated with erased silos, so "non-phantom" is technically redundant as the spec stands. The qualifier is included in case the spec changes to permit code annotated with non-erased silos in phantom branches.
+
+**Linearity**: per-branch discipline. Each branch must independently consume its linear bindings exactly once. The match mode determines whether and how the scrutinee is consumed; after that, normal linearity rules apply.
+
+A match expression requires an explicit mode keyword. Note: for type-correctness across all invocation silos, phantom constructors must still be accounted for in pattern matches (see Phantom constructors).
 
 **Match branches** come in four kinds:
 
@@ -184,11 +196,11 @@ LevelGT : Level → Level → Type
 - **Function definitions** explicitly specify their level, which must already exist (from a prior `def-lvl`).
 - **Higher levels call lower levels**: `lower`-calls go strictly downward. Library code defines low levels; `main()` sits high enough to reach everything it needs.
 - **Level unreachability**: any level higher than `main()`'s level is unreachable at runtime. This is a language-level guarantee, not just an optimization — functions and closures at those levels are replaced with no-ops (relevant to type sizing and size monomorphization).
-- `def-lvl` may appear inside functions, dynamically creating new levels. This interacts with closures (see below).
+- `def-lvl` may appear inside functions, dynamically creating new levels. These levels are UE and can be captured by closures.
 
 **Closures (v1 restriction):**
 
-Closures may only close over non-linear values (erased or not). Closing over linear values is deferred to v2.
+Closures may only close over UR and UE values. Closing over LR and LE values is deferred to v2.
 
 ## Future (v2)
 
