@@ -55,7 +55,7 @@ The target domain is low-level, correctness-critical code: encryption, compressi
 | **UE** | Freely | No | Type-level indices, closed proofs |
 
 Transition rules:
-- **Erase** (special form): `erase x` produces a UE expression that is definitionally equal to `x` (recognized by the canonicalization rewrite system). The original value is not consumed and retains its original silo. `erase` is the only built-in silo transition.
+- **Implicit UE projection**: any value used in a UE context is automatically projected to a UE expression that is definitionally equal to the original (recognized by the canonicalization rewrite system). The projection never consumes the original, whose silo is unchanged. This is the only built-in silo transition.
 - UE is the only free projection target. LR, LE, and UR are otherwise **independent** — no built-in way to move between them.
 - All type expressions live in UE.
 
@@ -84,7 +84,7 @@ Match return values use their declared silos directly (subject to phantom-constr
 
 The silo of a call determines whether the body executes at runtime (LR/UR: yes; LE/UE: no). This matters even for zero-return-value invocations (e.g., linear destructors).
 
-A value's silo is fixed at construction and does not change for the lifetime of the value. The only silo transition is `erase`, which produces a UE expression definitionally equal to the original — the original retains its silo.
+A value's silo is fixed at construction and does not change for the lifetime of the value. The only silo transition is implicit UE projection, which produces a UE expression definitionally equal to the original without consuming it — the original retains its silo.
 
 ADT types are not defined at a particular silo — the same type can be constructed at any silo. The silo is specified at each constructor invocation site, not in the type definition. Declared field silos are ceilings: the effective silo of a field at a given site is `meet(invocation_silo, declared_silo)`, which may be weaker than the declared silo.
 
